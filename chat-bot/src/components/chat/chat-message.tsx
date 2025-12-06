@@ -44,8 +44,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
             <div className="whitespace-pre-wrap">{message.content}</div>
           ) : (
             // AI messages get full markdown treatment
+            <div className="prose dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:p-0 break-words">
             <ReactMarkdown
-              className="prose dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:p-0 break-words"
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex]}
               components={{
@@ -80,6 +80,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             >
               {message.content}
             </ReactMarkdown>
+            </div>
           )}
         </div>
       </div>

@@ -74,7 +74,7 @@ export default function Home() {
       <header className="h-14 border-b flex items-center px-6 bg-background shadow-sm z-10 justify-between">
         <h1 className="font-semibold text-lg">Personal AI Assistant</h1>
         <div className="text-xs text-muted-foreground">
-          Model: DeepSeek-R1 (via Ollama)
+          Model: qwen3:4b (via Ollama)
         </div>
       </header>
       <div className="flex-1 overflow-hidden flex flex-col">

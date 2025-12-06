@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           const response = await ollama.chat({
-            model: "deepseek-r1:1.5b", // Defaulting to a lightweight model
+            model: "qwen3:4b", // User specified model
             messages: messages.map((m: any) => ({
               role: m.role,
               content: m.content,
