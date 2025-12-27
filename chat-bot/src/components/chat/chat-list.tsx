@@ -1,14 +1,34 @@
 import * as React from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ChatMessage, Message } from "./chat-message"
+import { Button } from "@/components/ui/button"
 
 interface ChatListProps {
   messages: Message[]
   streamingMessage?: Message | null
+  initialVisibleCount?: number
 }
 
-export function ChatList({ messages, streamingMessage }: ChatListProps) {
+export function ChatList({
+  messages,
+  streamingMessage,
+  initialVisibleCount = 2,
+}: ChatListProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null)
+  const [visibleCount, setVisibleCount] = React.useState(() =>
+    Math.max(0, initialVisibleCount)
+  )
+
+  // When switching sessions, reset to the default window size.
+  React.useEffect(() => {
+    setVisibleCount(Math.max(0, initialVisibleCount))
+  }, [initialVisibleCount])
+
+  const showAll = visibleCount >= messages.length
+  const visibleMessages = React.useMemo(() => {
+    if (messages.length <= visibleCount) return messages
+    return messages.slice(-visibleCount)
+  }, [messages, visibleCount])
 
   React.useEffect(() => {
     if (scrollRef.current) {
@@ -17,12 +37,25 @@ export function ChatList({ messages, streamingMessage }: ChatListProps) {
         scrollContainer.scrollTop = scrollContainer.scrollHeight
       }
     }
-  }, [messages, streamingMessage])
+  }, [visibleMessages, streamingMessage])
 
   return (
     <ScrollArea ref={scrollRef} className="flex-1 h-full">
       <div className="flex flex-col max-w-3xl mx-auto p-4 pb-32">
-        {messages.map((message) => (
+        {messages.length > visibleCount && (
+          <div className="flex justify-center mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={() => setVisibleCount(messages.length)}
+            >
+              Show earlier messages
+            </Button>
+          </div>
+        )}
+
+        {visibleMessages.map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}
         {streamingMessage && (

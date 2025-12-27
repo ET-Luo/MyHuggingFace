@@ -215,6 +215,8 @@ export function ChatSidebar({
                   <div className="flex-1 min-w-0">
                     {editingId === session.id ? (
                       <input
+                        id={`rename-session-${session.id}`}
+                        name="rename-session"
                         ref={renameInputRef}
                         autoFocus
                         className="bg-background border border-primary/30 outline-none text-sm w-full py-0 px-1 rounded shadow-sm"
