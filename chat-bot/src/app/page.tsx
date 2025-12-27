@@ -22,7 +22,7 @@ export default function Home() {
   const {
     sessions,
     currentSessionId,
-    setCurrentSessionId,
+    selectSession,
     createNewSession,
     deleteSession,
     renameSession,
@@ -72,10 +72,6 @@ export default function Home() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let aiContent = ""
-      
-      // Initialize streaming message
-      const aiMessageId = (Date.now() + 1).toString()
-      setStreamingMessage({ id: aiMessageId, role: "assistant", content: "" })
 
       while (true) {
         const { done, value } = await reader.read()
@@ -114,7 +110,7 @@ export default function Home() {
         <ChatSidebar
           sessions={sessions}
           currentSessionId={currentSessionId}
-          onSelectSession={setCurrentSessionId}
+          onSelectSession={selectSession}
           onCreateSession={createNewSession}
           onDeleteSession={deleteSession}
           onRenameSession={renameSession}
@@ -142,7 +138,7 @@ export default function Home() {
                   sessions={sessions}
                   currentSessionId={currentSessionId}
                   onSelectSession={(id) => {
-                    setCurrentSessionId(id)
+                    selectSession(id)
                     setIsMobileMenuOpen(false)
                   }}
                   onCreateSession={() => {

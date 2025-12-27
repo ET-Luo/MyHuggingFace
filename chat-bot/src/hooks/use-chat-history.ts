@@ -15,7 +15,69 @@ const STORAGE_KEY = "chat_history"
 export function useChatHistory() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  // A "New Chat" that hasn't received any user message yet (Gemini-like: not stored until first message).
+  const [pendingSession, setPendingSession] = useState<ChatSession | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
+
+  const generateId = () => {
+    // Prefer UUIDs to avoid collisions (Date.now can collide within the same ms).
+    try {
+      return crypto.randomUUID()
+    } catch {
+      return `${Date.now()}_${Math.random().toString(16).slice(2)}`
+    }
+  }
+
+  const normalizeSessions = (raw: unknown): ChatSession[] => {
+    if (!Array.isArray(raw)) return []
+    const used = new Set<string>()
+
+    return raw
+      .map((s: any) => {
+        const base: ChatSession = {
+          id: typeof s?.id === "string" ? s.id : generateId(),
+          title: typeof s?.title === "string" ? s.title : "New Chat",
+          messages: Array.isArray(s?.messages) ? s.messages : [],
+          createdAt: typeof s?.createdAt === "number" ? s.createdAt : Date.now(),
+        }
+
+        // Ensure uniqueness even if localStorage already contains duplicates.
+        if (used.has(base.id)) base.id = generateId()
+        used.add(base.id)
+        return base
+      })
+      .filter(Boolean)
+  }
+
+  const upsertById = (prev: ChatSession[], session: ChatSession) => {
+    const idx = prev.findIndex((s) => s.id === session.id)
+    if (idx === -1) return [session, ...prev]
+    const next = prev.slice()
+    next[idx] = session
+    return next
+  }
+
+  const deriveTitle = (existingTitle: string, messages: Message[]) => {
+    if (existingTitle !== "New Chat" || messages.length === 0) return existingTitle
+    const firstUserMsg = messages.find((m) => m.role === "user" && m.content?.trim())
+    if (!firstUserMsg) return existingTitle
+    return (
+      firstUserMsg.content.slice(0, 30) +
+      (firstUserMsg.content.length > 30 ? "..." : "")
+    )
+  }
+
+  const createPendingSession = () => {
+    const newSession: ChatSession = {
+      id: generateId(),
+      title: "New Chat",
+      messages: [],
+      createdAt: Date.now(),
+    }
+    setPendingSession(newSession)
+    setCurrentSessionId(newSession.id)
+    return newSession.id
+  }
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -23,18 +85,20 @@ export function useChatHistory() {
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
-        setSessions(parsed)
-        if (parsed.length > 0) {
-          setCurrentSessionId(parsed[0].id)
+        const normalized = normalizeSessions(parsed)
+        setSessions(normalized)
+        if (normalized.length > 0) {
+          setCurrentSessionId(normalized[0].id)
+          setPendingSession(null)
         } else {
-          createNewSession()
+          createPendingSession()
         }
       } catch (e) {
         console.error("Failed to parse chat history", e)
-        createNewSession()
+        createPendingSession()
       }
     } else {
-      createNewSession()
+      createPendingSession()
     }
     setIsInitialized(true)
   }, [])
@@ -46,36 +110,35 @@ export function useChatHistory() {
     }
   }, [sessions, isInitialized])
 
-  const createNewSession = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: "New Chat",
-      messages: [],
-      createdAt: Date.now(),
-    }
-    setSessions((prev) => [newSession, ...prev])
-    setCurrentSessionId(newSession.id)
-    return newSession.id
+  const createNewSession = () => createPendingSession()
+
+  // Selecting an existing session should drop an empty pending session (Gemini-like).
+  const selectSession = (id: string | null) => {
+    setCurrentSessionId(id)
+    setPendingSession((prev) => {
+      if (!prev) return prev
+      if (id !== prev.id && prev.messages.length === 0) return null
+      return prev
+    })
   }
 
   const deleteSession = (id: string) => {
     setSessions((prev) => {
       const remaining = prev.filter((s) => s.id !== id)
 
-      // If we deleted the last session, immediately create a new one to keep UX consistent.
+      // If current session was deleted, select the newest remaining session, otherwise go pending.
+      setCurrentSessionId((prevId) => {
+        if (prevId !== id) return prevId
+        if (remaining.length > 0) return remaining[0].id
+        // No stored sessions left → go to an unpersisted pending chat.
+        return null
+      })
+
       if (remaining.length === 0) {
-        const newSession: ChatSession = {
-          id: Date.now().toString(),
-          title: "New Chat",
-          messages: [],
-          createdAt: Date.now(),
-        }
-        setCurrentSessionId(newSession.id)
-        return [newSession]
+        // ensure we have a pending session to land on
+        createPendingSession()
       }
 
-      // If current session was deleted, select the newest remaining session.
-      setCurrentSessionId((prevId) => (prevId === id ? remaining[0].id : prevId))
       return remaining
     })
   }
@@ -91,34 +154,52 @@ export function useChatHistory() {
   const updateCurrentSessionMessages = (messages: Message[]) => {
     if (!currentSessionId) return
 
-    setSessions((prev) =>
-      prev.map((session) => {
-        if (session.id === currentSessionId) {
-          // Generate a title from the first user message if title is "New Chat"
-          let title = session.title
-          if (session.title === "New Chat" && messages.length > 0) {
-            const firstUserMsg = messages.find(m => m.role === "user")
-            if (firstUserMsg) {
-              title = firstUserMsg.content.slice(0, 30) + (firstUserMsg.content.length > 30 ? "..." : "")
-            }
-          }
-          return { ...session, messages, title }
-        }
-        return session
-      })
+    const hasNonEmptyUserMsg = messages.some(
+      (m) => m.role === "user" && m.content?.trim().length
     )
+
+    // 1) Update stored session if it exists (purely functional to avoid stale closures)
+    setSessions((prev) => {
+      const idx = prev.findIndex((s) => s.id === currentSessionId)
+      if (idx === -1) return prev
+      const session = prev[idx]
+      const title = deriveTitle(session.title, messages)
+      const updated = { ...session, messages, title }
+      const next = prev.slice()
+      next[idx] = updated
+      return next
+    })
+
+    // 2) Pending session: update in-memory, and only commit once (upsert) when the user actually sends content.
+    setPendingSession((prevPending) => {
+      if (!prevPending || prevPending.id !== currentSessionId) return prevPending
+
+      const title = deriveTitle(prevPending.title, messages)
+      const updatedPending: ChatSession = { ...prevPending, messages, title }
+
+      if (hasNonEmptyUserMsg) {
+        // Commit idempotently: if already committed (e.g. due to rapid successive updates),
+        // just update the existing stored session instead of inserting duplicates.
+        setSessions((prev) => upsertById(prev, updatedPending))
+        return null
+      }
+
+      return updatedPending
+    })
   }
 
   const currentSession = sessions.find((s) => s.id === currentSessionId)
+  const currentPending =
+    pendingSession?.id === currentSessionId ? pendingSession : null
 
   return {
     sessions,
     currentSessionId,
-    setCurrentSessionId,
+    selectSession,
     createNewSession,
     deleteSession,
     renameSession,
-    currentMessages: currentSession?.messages || [],
+    currentMessages: currentSession?.messages || currentPending?.messages || [],
     updateCurrentSessionMessages,
     isInitialized
   }
