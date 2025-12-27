@@ -124,11 +124,14 @@ export const ChatMessage = React.memo(({ message }: ChatMessageProps) => {
                   {mainContent}
                 </ReactMarkdown>
               ) : (
-                /* If only thinking, show a spinner or "Thinking..." text for the main part? 
-                   Actually, showing nothing for main part is fine if ThinkBlock is visible. */
-                thinkContent && !message.content.includes("</think>") ? (
-                  <span className="animate-pulse">Thinking...</span>
-                ) : null
+                <div className="flex items-center gap-2 py-1">
+                  <div className="flex gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:-0.3s]"></span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:-0.15s]"></span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"></span>
+                  </div>
+                  <span className="text-xs text-muted-foreground italic">AI is thinking...</span>
+                </div>
               )}
             </div>
           )}

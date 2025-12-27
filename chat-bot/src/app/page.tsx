@@ -7,8 +7,9 @@ import { ChatSidebar } from "@/components/chat/chat-sidebar"
 import { Message } from "@/components/chat/chat-message"
 import { useChatHistory } from "@/hooks/use-chat-history"
 import { Menu } from "lucide-react"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ export default function Home() {
     setCurrentSessionId,
     createNewSession,
     deleteSession,
+    renameSession,
     currentMessages,
     updateCurrentSessionMessages,
     isInitialized
@@ -33,6 +35,7 @@ export default function Home() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
   const [selectedModel, setSelectedModel] = React.useState("qwen3:4b")
   const [streamingMessage, setStreamingMessage] = React.useState<Message | null>(null)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false)
 
   const handleSend = async (content: string) => {
     const userMessage: Message = {
@@ -45,6 +48,10 @@ export default function Home() {
     const updatedMessages = [...currentMessages, userMessage]
     updateCurrentSessionMessages(updatedMessages)
     setIsLoading(true)
+
+    // Initialize streaming message immediately as a placeholder
+    const aiMessageId = (Date.now() + 1).toString()
+    setStreamingMessage({ id: aiMessageId, role: "assistant", content: "" })
 
     try {
       const response = await fetch("/api/chat", {
@@ -100,17 +107,23 @@ export default function Home() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Desktop Sidebar */}
-      <div className="hidden md:block">
+      <div className={cn(
+        "hidden md:block transition-all duration-300",
+        isSidebarCollapsed ? "w-16" : "w-64"
+      )}>
         <ChatSidebar
           sessions={sessions}
           currentSessionId={currentSessionId}
           onSelectSession={setCurrentSessionId}
           onCreateSession={createNewSession}
           onDeleteSession={deleteSession}
+          onRenameSession={renameSession}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
       </div>
 
-      <main className="flex flex-col flex-1 h-full relative">
+      <main className="flex flex-col flex-1 h-full relative overflow-hidden">
         <header className="h-14 border-b flex items-center px-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 justify-between">
           <div className="flex items-center gap-2">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -120,6 +133,11 @@ export default function Home() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0 w-72">
+                {/* a11y: Radix DialogContent requires a Title/Description for screen readers */}
+                <SheetTitle className="sr-only">Chat history</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Select a conversation, rename or delete it, or start a new chat.
+                </SheetDescription>
                  <ChatSidebar
                   sessions={sessions}
                   currentSessionId={currentSessionId}
@@ -132,10 +150,26 @@ export default function Home() {
                     setIsMobileMenuOpen(false)
                   }}
                   onDeleteSession={deleteSession}
+                  onRenameSession={renameSession}
+                  isCollapsed={false}
+                  onToggleCollapse={() => setIsMobileMenuOpen(false)}
                 />
               </SheetContent>
             </Sheet>
-            <h1 className="font-semibold text-lg">Personal AI Assistant</h1>
+            
+            {/* Show toggle button in header when sidebar is collapsed on desktop */}
+            {isSidebarCollapsed && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="hidden md:flex"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
+            
+            <h1 className="font-semibold text-lg ml-1">Personal AI Assistant</h1>
           </div>
           <div className="flex items-center gap-2">
              <Select value={selectedModel} onValueChange={setSelectedModel}>

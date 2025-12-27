@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
             model: selectedModel, 
             messages: finalMessages,
             stream: true,
+            keep_alive: "1h", // Keep model in memory for 1 hour
           }).catch(err => {
             throw new Error(`Ollama Error: ${err.message || 'Failed to connect to Ollama'}`);
           });

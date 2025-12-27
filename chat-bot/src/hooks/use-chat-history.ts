@@ -60,16 +60,32 @@ export function useChatHistory() {
 
   const deleteSession = (id: string) => {
     setSessions((prev) => {
-      const newSessions = prev.filter((s) => s.id !== id)
-      if (currentSessionId === id) {
-        setCurrentSessionId(newSessions[0]?.id || null)
+      const remaining = prev.filter((s) => s.id !== id)
+
+      // If we deleted the last session, immediately create a new one to keep UX consistent.
+      if (remaining.length === 0) {
+        const newSession: ChatSession = {
+          id: Date.now().toString(),
+          title: "New Chat",
+          messages: [],
+          createdAt: Date.now(),
+        }
+        setCurrentSessionId(newSession.id)
+        return [newSession]
       }
-      return newSessions
+
+      // If current session was deleted, select the newest remaining session.
+      setCurrentSessionId((prevId) => (prevId === id ? remaining[0].id : prevId))
+      return remaining
     })
-    // If we deleted the last session, create a new one
-    if (sessions.length === 1 && sessions[0].id === id) {
-       createNewSession()
-    }
+  }
+
+  const renameSession = (id: string, newTitle: string) => {
+    const title = newTitle.trim()
+    if (!title) return
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, title } : s))
+    )
   }
 
   const updateCurrentSessionMessages = (messages: Message[]) => {
@@ -101,6 +117,7 @@ export function useChatHistory() {
     setCurrentSessionId,
     createNewSession,
     deleteSession,
+    renameSession,
     currentMessages: currentSession?.messages || [],
     updateCurrentSessionMessages,
     isInitialized
