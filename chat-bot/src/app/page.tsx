@@ -165,7 +165,7 @@ export default function Home() {
               </Button>
             )}
             
-            <h1 className="font-semibold text-lg ml-1">Personal AI Assistant</h1>
+            <h1 className="font-semibold text-lg ml-1">Elia</h1>
           </div>
           <div className="flex items-center gap-2">
              <Select value={selectedModel} onValueChange={setSelectedModel}>

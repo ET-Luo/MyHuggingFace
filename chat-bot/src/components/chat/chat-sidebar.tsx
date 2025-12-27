@@ -197,21 +197,21 @@ export function ChatSidebar({
         </div>
       )}
 
-      <ScrollArea className="flex-1">
-        <div className={cn("p-2 space-y-2", isCollapsed && "flex flex-col items-center")}>
-          {sessions.map((session) => (
-            <div key={session.id} className="relative group px-2 mb-0.5">
-              <div
-                className={cn(
-                  "flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors relative",
-                  currentSessionId === session.id 
-                    ? "bg-secondary text-secondary-foreground font-medium" 
-                    : "text-muted-foreground hover:bg-secondary/50",
-                  isCollapsed ? "w-10 h-10 justify-center p-0" : "w-full"
-                )}
-                onClick={() => onSelectSession(session.id)}
-              >
-                {!isCollapsed && (
+      {/* Collapsed sidebar should not allow selecting history items (Gemini-like). */}
+      {!isCollapsed && (
+        <ScrollArea className="flex-1">
+          <div className={cn("p-2 space-y-2")}>
+            {sessions.map((session) => (
+              <div key={session.id} className="relative group px-2 mb-0.5">
+                <div
+                  className={cn(
+                    "flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors relative w-full",
+                    currentSessionId === session.id 
+                      ? "bg-secondary text-secondary-foreground font-medium" 
+                      : "text-muted-foreground hover:bg-secondary/50"
+                  )}
+                  onClick={() => onSelectSession(session.id)}
+                >
                   <div className="flex-1 min-w-0">
                     {editingId === session.id ? (
                       <input
@@ -228,75 +228,75 @@ export function ChatSidebar({
                       <SessionTitle title={session.title} />
                     )}
                   </div>
-                )}
 
-                {/* 操作按钮：固定宽度列，永远不会被文字挤走 */}
-                {!isCollapsed && editingId !== session.id && (
-                  <div className="shrink-0 w-8 flex items-center justify-end">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "h-8 w-8 hover:bg-background/80",
-                        // Make it easy to discover: show on hover, keep visible when menu is open or focused
-                        menuOpenId === session.id
-                          ? "opacity-100"
-                          : "opacity-100 md:opacity-0 md:group-hover:!opacity-100 md:group-focus-within:!opacity-100"
-                      )}
-                      data-session-menu-button="true"
+                  {/* 操作按钮：固定宽度列，永远不会被文字挤走 */} 
+                  {editingId !== session.id && (
+                    <div className="shrink-0 w-8 flex items-center justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-8 w-8 hover:bg-background/80",
+                          // Make it easy to discover: show on hover, keep visible when menu is open or focused
+                          menuOpenId === session.id
+                            ? "opacity-100"
+                            : "opacity-100 md:opacity-0 md:group-hover:!opacity-100 md:group-focus-within:!opacity-100"
+                        )}
+                        data-session-menu-button="true"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMenuOpenId(menuOpenId === session.id ? null : session.id)
+                        }}
+                        aria-label="Open session menu"
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpenId === session.id}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Menu (Simple version without Radix Dropdown) */}
+                {menuOpenId === session.id && (
+                  <div
+                    ref={menuRef}
+                    className="absolute right-0 mt-1 w-36 bg-popover border rounded-md shadow-lg z-20 py-1 text-sm"
+                    role="menu"
+                  >
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-accent text-left"
+                      role="menuitem"
                       onClick={(e) => {
                         e.stopPropagation()
-                        setMenuOpenId(menuOpenId === session.id ? null : session.id)
+                        handleStartRename(session)
                       }}
-                      aria-label="Open session menu"
-                      aria-haspopup="menu"
-                      aria-expanded={menuOpenId === session.id}
                     >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
+                      <Pencil className="h-3.5 w-3.5" />
+                      Rename
+                    </button>
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-accent text-destructive text-left"
+                      role="menuitem"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const ok = window.confirm("Delete this chat? This cannot be undone.")
+                        if (ok) {
+                          onDeleteSession(session.id)
+                          setMenuOpenId(null)
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
                   </div>
                 )}
               </div>
-
-              {/* Action Menu (Simple version without Radix Dropdown) */}
-              {menuOpenId === session.id && !isCollapsed && (
-                <div
-                  ref={menuRef}
-                  className="absolute right-0 mt-1 w-36 bg-popover border rounded-md shadow-lg z-20 py-1 text-sm"
-                  role="menu"
-                >
-                  <button
-                    className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-accent text-left"
-                    role="menuitem"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleStartRename(session)
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Rename
-                  </button>
-                  <button
-                    className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-accent text-destructive text-left"
-                    role="menuitem"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      const ok = window.confirm("Delete this chat? This cannot be undone.")
-                      if (ok) {
-                        onDeleteSession(session.id)
-                        setMenuOpenId(null)
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+            ))}
+          </div>
+        </ScrollArea>
+      )}
     </div>
   )
 }

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Personal AI Assistant",
-  description: "A local AI chat assistant built with Next.js and Tauri",
+  title: "Elia",
+  description: "A local AI chat assistant built with Next.js and Tauri. Powered by Ollama's qwen3:4b model.",
 };
 
 export default function RootLayout({

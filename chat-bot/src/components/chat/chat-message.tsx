@@ -7,7 +7,7 @@ import rehypeKatex from "rehype-katex"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
 import "katex/dist/katex.min.css"
-import { Brain, ChevronDown, ChevronRight } from "lucide-react"
+import { Brain, ChevronDown, ChevronRight, Sparkles } from "lucide-react"
 import React, { useState } from "react"
 // ... (rest of imports unchanged)
 
@@ -67,9 +67,22 @@ export const ChatMessage = React.memo(({ message }: ChatMessageProps) => {
     <div className={cn("flex w-full mb-6", isUser ? "justify-end" : "justify-start")}>
       <div className={cn("flex gap-3 max-w-[90%] md:max-w-[80%]", isUser ? "flex-row-reverse" : "flex-row")}>
         <Avatar className="h-8 w-8 shrink-0 mt-1">
-          <AvatarFallback className={cn(isUser ? "bg-primary text-primary-foreground" : "bg-muted")}>
-            {isUser ? "ME" : "AI"}
-          </AvatarFallback>
+          {isUser ? (
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              ME
+            </AvatarFallback>
+          ) : (
+            <AvatarFallback
+              className={cn(
+                "text-white",
+                "bg-gradient-to-br from-sky-500 via-violet-500 to-fuchsia-500",
+                "ring-1 ring-black/5 dark:ring-white/10"
+              )}
+              aria-label="AI"
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            </AvatarFallback>
+          )}
         </Avatar>
         
         <div
