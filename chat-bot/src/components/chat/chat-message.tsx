@@ -7,6 +7,9 @@ import rehypeKatex from "rehype-katex"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
 import "katex/dist/katex.min.css"
+import { Brain, ChevronDown, ChevronRight } from "lucide-react"
+import React, { useState } from "react"
+// ... (rest of imports unchanged)
 
 export interface Message {
   id: string
@@ -18,8 +21,47 @@ interface ChatMessageProps {
   message: Message
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+function ThinkBlock({ content }: { content: string }) {
+  const [isOpen, setIsOpen] = useState(true)
+
+  return (
+    <div className="mb-4 border rounded-lg bg-muted/50 overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 w-full p-2 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+      >
+        <Brain className="h-3 w-3" />
+        <span>Thinking Process</span>
+        {isOpen ? <ChevronDown className="h-3 w-3 ml-auto" /> : <ChevronRight className="h-3 w-3 ml-auto" />}
+      </button>
+      {isOpen && (
+         <div className="p-3 border-t text-muted-foreground text-sm bg-background/50">
+           {/* Use simpler rendering for thoughts, or full markdown if preferred */}
+           <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+               {content}
+             </ReactMarkdown>
+           </div>
+         </div>
+      )}
+    </div>
+  )
+}
+
+export const ChatMessage = React.memo(({ message }: ChatMessageProps) => {
   const isUser = message.role === "user"
+  
+  // Parse <think> tags
+  let thinkContent = ""
+  let mainContent = message.content
+
+  if (!isUser) {
+    const thinkMatch = /<think>([\s\S]*?)(?:<\/think>|$)/.exec(message.content)
+    if (thinkMatch) {
+      thinkContent = thinkMatch[1]
+      mainContent = message.content.replace(/<think>[\s\S]*?(?:<\/think>|$)/, "").trim()
+    }
+  }
 
   return (
     <div className={cn("flex w-full mb-6", isUser ? "justify-end" : "justify-start")}>
@@ -39,51 +81,61 @@ export function ChatMessage({ message }: ChatMessageProps) {
           )}
         >
           {isUser ? (
-            // User messages usually don't need heavy markdown rendering, but we can enable it if needed.
-            // For now, simple text with line breaks is often safer/cleaner for user inputs.
             <div className="whitespace-pre-wrap">{message.content}</div>
           ) : (
-            // AI messages get full markdown treatment
             <div className="prose dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:p-0 break-words">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-              components={{
-                p({ children }) {
-                  return <p className="mb-2 last:mb-0">{children}</p>
-                },
-                code({ node, inline, className, children, ...props }: any) {
-                  const match = /language-(\w+)/.exec(className || "")
-                  return !inline && match ? (
-                    <div className="rounded-md overflow-hidden my-2">
-                      <div className="bg-zinc-800 px-4 py-1 text-xs text-zinc-400 flex justify-between items-center">
-                        <span>{match[1]}</span>
-                        {/* Future: Add Copy button here */}
-                      </div>
-                      <SyntaxHighlighter
-                        {...props}
-                        style={oneDark}
-                        language={match[1]}
-                        PreTag="div"
-                        customStyle={{ margin: 0, borderRadius: 0 }}
-                      >
-                        {String(children).replace(/\n$/, "")}
-                      </SyntaxHighlighter>
-                    </div>
-                  ) : (
-                    <code {...props} className={cn("bg-muted px-1.5 py-0.5 rounded font-mono text-xs", className)}>
-                      {children}
-                    </code>
-                  )
-                }
-              }}
-            >
-              {message.content}
-            </ReactMarkdown>
+              {thinkContent && <ThinkBlock content={thinkContent} />}
+              
+              {/* Only render main content if it exists (handle case where only thinking is present during stream) */}
+              {mainContent ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={{
+                    p({ children }) {
+                      return <p className="mb-2 last:mb-0">{children}</p>
+                    },
+                    code({ node, inline, className, children, ...props }: any) {
+                      const match = /language-(\w+)/.exec(className || "")
+                      return !inline && match ? (
+                        <div className="rounded-md overflow-hidden my-2">
+                          <div className="bg-zinc-800 px-4 py-1 text-xs text-zinc-400 flex justify-between items-center">
+                            <span>{match[1]}</span>
+                            {/* Future: Add Copy button here */}
+                          </div>
+                          <SyntaxHighlighter
+                            {...props}
+                            style={oneDark}
+                            language={match[1]}
+                            PreTag="div"
+                            customStyle={{ margin: 0, borderRadius: 0 }}
+                          >
+                            {String(children).replace(/\n$/, "")}
+                          </SyntaxHighlighter>
+                        </div>
+                      ) : (
+                        <code {...props} className={cn("bg-muted px-1.5 py-0.5 rounded font-mono text-xs", className)}>
+                          {children}
+                        </code>
+                      )
+                    }
+                  }}
+                >
+                  {mainContent}
+                </ReactMarkdown>
+              ) : (
+                /* If only thinking, show a spinner or "Thinking..." text for the main part? 
+                   Actually, showing nothing for main part is fine if ThinkBlock is visible. */
+                thinkContent && !message.content.includes("</think>") ? (
+                  <span className="animate-pulse">Thinking...</span>
+                ) : null
+              )}
             </div>
           )}
         </div>
       </div>
     </div>
   )
-}
+})
+
+ChatMessage.displayName = "ChatMessage"
