@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Ollama } from "ollama";
+import { buildWebRagContext } from "@/lib/rag/web-rag";
 
 // Initialize Ollama client
-const ollama = new Ollama({ host: "http://127.0.0.1:11434" });
+const ollamaHost = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
+const ollama = new Ollama({ host: ollamaHost });
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, model } = await req.json();
+    const { messages, model, enableWeb } = await req.json();
 
     // Get the last message from the user
     const lastMessage = messages[messages.length - 1];
@@ -27,15 +29,47 @@ export async function POST(req: NextRequest) {
             content: m.content,
           }));
 
-          // Inject System Prompt for Qwen models (or if requested) to force thinking process
+          const systemBlocks: string[] = [];
+
+          // Qwen: keep your original <think> behavior, but ensure citations appear in the final answer.
           if (selectedModel.toLowerCase().includes("qwen")) {
-            const systemPrompt = "You are a helpful AI assistant. Please think step-by-step before answering the user's request. Enclose your thinking process within <think> and </think> tags, then provide your final answer.";
-            
-            // Check if there is already a system message at the start
-            if (finalMessages.length > 0 && finalMessages[0].role === 'system') {
-               finalMessages[0].content += `\n\n${systemPrompt}`;
+            systemBlocks.push(
+              [
+                "You are a helpful AI assistant.",
+                "Please think step-by-step before answering the user's request.",
+                "Enclose your thinking process within <think> and </think> tags, then provide your final answer.",
+                "IMPORTANT: Any citations and the Sources section must appear in the final answer (outside <think>).",
+              ].join(" ")
+            );
+          }
+
+          // Web RAG (Tavily + LlamaIndex), gated by request flag or env default.
+          const webEnabled =
+            Boolean(enableWeb) || process.env.RAG_ENABLE_WEB === "1";
+
+          if (webEnabled) {
+            const rag = await buildWebRagContext(String(lastMessage.content ?? ""));
+            if (rag?.context) {
+              systemBlocks.push(
+                [
+                  "You have access to WEB_EVIDENCE and SOURCES below.",
+                  "Use WEB_EVIDENCE as the primary factual basis when it is relevant.",
+                  "When you use evidence, cite it inline using [n] where n matches the source id.",
+                  "At the end of your final answer, add a 'Sources' section with the sources you cited.",
+                  "Do not invent sources. If evidence is insufficient, say so.",
+                  "",
+                  rag.context,
+                ].join("\n")
+              );
+            }
+          }
+
+          if (systemBlocks.length) {
+            const merged = systemBlocks.join("\n\n");
+            if (finalMessages.length > 0 && finalMessages[0].role === "system") {
+              finalMessages[0].content = `${finalMessages[0].content}\n\n${merged}`;
             } else {
-               finalMessages.unshift({ role: 'system', content: systemPrompt });
+              finalMessages.unshift({ role: "system", content: merged });
             }
           }
 

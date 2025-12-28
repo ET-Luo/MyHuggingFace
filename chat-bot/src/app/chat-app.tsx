@@ -41,6 +41,7 @@ export function ChatApp() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
   const [selectedModel, setSelectedModel] = React.useState("qwen3:4b")
+  const [enableWeb, setEnableWeb] = React.useState(false)
   const [streamingMessage, setStreamingMessage] = React.useState<Message | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false)
 
@@ -70,6 +71,7 @@ export function ChatApp() {
             content: m.content,
           })),
           model: selectedModel,
+          enableWeb,
         }),
       })
 
@@ -192,6 +194,17 @@ export function ChatApp() {
                 </SelectItem>
               </SelectContent>
             </Select>
+
+            <label className="flex items-center gap-2 text-xs text-muted-foreground select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary"
+                checked={enableWeb}
+                onChange={(e) => setEnableWeb(e.target.checked)}
+                aria-label="Enable web search"
+              />
+              <span>Web</span>
+            </label>
           </div>
         </header>
 
