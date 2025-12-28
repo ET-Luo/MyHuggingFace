@@ -24,7 +24,6 @@ export function ChatList({
     setVisibleCount(Math.max(0, initialVisibleCount))
   }, [initialVisibleCount])
 
-  const showAll = visibleCount >= messages.length
   const visibleMessages = React.useMemo(() => {
     if (messages.length <= visibleCount) return messages
     return messages.slice(-visibleCount)

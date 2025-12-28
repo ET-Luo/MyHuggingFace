@@ -6,9 +6,22 @@ import { buildWebRagContext } from "@/lib/rag/web-rag";
 const ollamaHost = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
 const ollama = new Ollama({ host: ollamaHost });
 
+type IncomingMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const { messages, model, enableWeb } = await req.json();
+    const body = (await req.json()) as {
+      messages?: IncomingMessage[];
+      model?: string;
+      enableWeb?: boolean;
+    };
+
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    const model = typeof body.model === "string" ? body.model : undefined;
+    const enableWeb = Boolean(body.enableWeb);
 
     // Get the last message from the user
     const lastMessage = messages[messages.length - 1];
@@ -24,7 +37,7 @@ export async function POST(req: NextRequest) {
           const selectedModel = model || "qwen3:4b";
 
           // Prepare messages
-          let finalMessages = messages.map((m: any) => ({
+          const finalMessages = messages.map((m) => ({
             role: m.role,
             content: m.content,
           }));
@@ -48,19 +61,23 @@ export async function POST(req: NextRequest) {
             Boolean(enableWeb) || process.env.RAG_ENABLE_WEB === "1";
 
           if (webEnabled) {
-            const rag = await buildWebRagContext(String(lastMessage.content ?? ""));
-            if (rag?.context) {
-              systemBlocks.push(
-                [
-                  "You have access to WEB_EVIDENCE and SOURCES below.",
-                  "Use WEB_EVIDENCE as the primary factual basis when it is relevant.",
-                  "When you use evidence, cite it inline using [n] where n matches the source id.",
-                  "At the end of your final answer, add a 'Sources' section with the sources you cited.",
-                  "Do not invent sources. If evidence is insufficient, say so.",
-                  "",
-                  rag.context,
-                ].join("\n")
-              );
+            try {
+              const rag = await buildWebRagContext(String(lastMessage.content ?? ""));
+              if (rag?.context) {
+                systemBlocks.push(
+                  [
+                    "You have access to WEB_EVIDENCE and SOURCES below.",
+                    "Use WEB_EVIDENCE as the primary factual basis when it is relevant.",
+                    "When you use evidence, cite it inline using [n] where n matches the source id.",
+                    "At the end of your final answer, add a 'Sources' section with the sources you cited.",
+                    "Do not invent sources. If evidence is insufficient, say so.",
+                    "",
+                    rag.context,
+                  ].join("\n")
+                );
+              }
+            } catch (err) {
+              console.warn("[web-rag] failed, fallback to normal chat:", err);
             }
           }
 

@@ -11,8 +11,16 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    // Tauri / Rust build outputs (generated)
+    "src-tauri/target/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Too strict for common client-side patterns (e.g. IDs/timestamps in event handlers and init code)
+      "react-hooks/purity": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

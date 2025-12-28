@@ -13,12 +13,6 @@ export interface ChatSession {
 const STORAGE_KEY = "chat_history"
 
 export function useChatHistory() {
-  const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
-  // A "New Chat" that hasn't received any user message yet (Gemini-like: not stored until first message).
-  const [pendingSession, setPendingSession] = useState<ChatSession | null>(null)
-  const [isInitialized, setIsInitialized] = useState(false)
-
   const generateId = () => {
     // Prefer UUIDs to avoid collisions (Date.now can collide within the same ms).
     try {
@@ -28,17 +22,21 @@ export function useChatHistory() {
     }
   }
 
+  const isRecord = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null
+
   const normalizeSessions = (raw: unknown): ChatSession[] => {
     if (!Array.isArray(raw)) return []
     const used = new Set<string>()
 
     return raw
-      .map((s: any) => {
+      .map((s: unknown) => {
+        const r = isRecord(s) ? s : {}
         const base: ChatSession = {
-          id: typeof s?.id === "string" ? s.id : generateId(),
-          title: typeof s?.title === "string" ? s.title : "New Chat",
-          messages: Array.isArray(s?.messages) ? s.messages : [],
-          createdAt: typeof s?.createdAt === "number" ? s.createdAt : Date.now(),
+          id: typeof r.id === "string" ? r.id : generateId(),
+          title: typeof r.title === "string" ? r.title : "New Chat",
+          messages: Array.isArray(r.messages) ? (r.messages as Message[]) : [],
+          createdAt: typeof r.createdAt === "number" ? r.createdAt : Date.now(),
         }
 
         // Ensure uniqueness even if localStorage already contains duplicates.
@@ -48,6 +46,51 @@ export function useChatHistory() {
       })
       .filter(Boolean)
   }
+
+  const createSessionObject = (): ChatSession => ({
+    id: generateId(),
+    title: "New Chat",
+    messages: [],
+    createdAt: Date.now(),
+  })
+
+  const loadInitialState = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as unknown
+        const normalized = normalizeSessions(parsed)
+        if (normalized.length > 0) {
+          return {
+            sessions: normalized,
+            currentSessionId: normalized[0].id,
+            pendingSession: null as ChatSession | null,
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse chat history", e)
+    }
+
+    const pending = createSessionObject()
+    return {
+      sessions: [] as ChatSession[],
+      currentSessionId: pending.id,
+      pendingSession: pending,
+    }
+  }
+
+  const initial = loadInitialState()
+
+  const [sessions, setSessions] = useState<ChatSession[]>(initial.sessions)
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(
+    initial.currentSessionId
+  )
+  // A "New Chat" that hasn't received any user message yet (Gemini-like: not stored until first message).
+  const [pendingSession, setPendingSession] = useState<ChatSession | null>(
+    initial.pendingSession
+  )
+  const [isInitialized] = useState(true)
 
   const upsertById = (prev: ChatSession[], session: ChatSession) => {
     const idx = prev.findIndex((s) => s.id === session.id)
@@ -68,40 +111,11 @@ export function useChatHistory() {
   }
 
   const createPendingSession = () => {
-    const newSession: ChatSession = {
-      id: generateId(),
-      title: "New Chat",
-      messages: [],
-      createdAt: Date.now(),
-    }
+    const newSession = createSessionObject()
     setPendingSession(newSession)
     setCurrentSessionId(newSession.id)
     return newSession.id
   }
-
-  // Load from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored)
-        const normalized = normalizeSessions(parsed)
-        setSessions(normalized)
-        if (normalized.length > 0) {
-          setCurrentSessionId(normalized[0].id)
-          setPendingSession(null)
-        } else {
-          createPendingSession()
-        }
-      } catch (e) {
-        console.error("Failed to parse chat history", e)
-        createPendingSession()
-      }
-    } else {
-      createPendingSession()
-    }
-    setIsInitialized(true)
-  }, [])
 
   // Save to localStorage whenever sessions change
   useEffect(() => {
