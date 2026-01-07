@@ -13,7 +13,8 @@ import { Brain, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 function ThinkBlock({ content }: { content: string }) {
-  const [isOpen, setIsOpen] = useState(true)
+  // 默认折叠，用户需要时再展开，类似 Gemini 的 “思考过程” 查看体验
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
     <div className="mb-4 border rounded-lg bg-muted/50 overflow-hidden">

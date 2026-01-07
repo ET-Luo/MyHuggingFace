@@ -94,6 +94,12 @@ export async function buildWebRagContext(query: string): Promise<WebRagResult | 
     max_results: maxResults,
   })
 
+  console.log(`[web-rag] query: "${query}"`);
+  console.log(`[web-rag] found ${search.results?.length} results from Tavily.`);
+  search.results?.forEach((r, i) => {
+    console.log(`[web-rag] result ${i+1}: ${r.title} (${r.url})`);
+  });
+
   const results = (search.results ?? []).filter((r) => r?.url)
 
   // Build a stable sources list from Tavily results (used for citations).

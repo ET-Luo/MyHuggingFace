@@ -54,18 +54,25 @@ export function useChatHistory() {
     createdAt: Date.now(),
   })
 
-  const loadInitialState = () => {
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  // A "New Chat" that hasn't received any user message yet (Gemini-like: not stored until first message).
+  const [pendingSession, setPendingSession] = useState<ChatSession | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Load from localStorage only on the client to avoid SSR hydration mismatch
+  useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null
       if (stored) {
         const parsed = JSON.parse(stored) as unknown
         const normalized = normalizeSessions(parsed)
         if (normalized.length > 0) {
-          return {
-            sessions: normalized,
-            currentSessionId: normalized[0].id,
-            pendingSession: null as ChatSession | null,
-          }
+          setSessions(normalized)
+          setCurrentSessionId(normalized[0].id)
+          setPendingSession(null)
+          setIsInitialized(true)
+          return
         }
       }
     } catch (e) {
@@ -73,24 +80,11 @@ export function useChatHistory() {
     }
 
     const pending = createSessionObject()
-    return {
-      sessions: [] as ChatSession[],
-      currentSessionId: pending.id,
-      pendingSession: pending,
-    }
-  }
-
-  const initial = loadInitialState()
-
-  const [sessions, setSessions] = useState<ChatSession[]>(initial.sessions)
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(
-    initial.currentSessionId
-  )
-  // A "New Chat" that hasn't received any user message yet (Gemini-like: not stored until first message).
-  const [pendingSession, setPendingSession] = useState<ChatSession | null>(
-    initial.pendingSession
-  )
-  const [isInitialized] = useState(true)
+    setSessions([])
+    setCurrentSessionId(pending.id)
+    setPendingSession(pending)
+    setIsInitialized(true)
+  }, [])
 
   const upsertById = (prev: ChatSession[], session: ChatSession) => {
     const idx = prev.findIndex((s) => s.id === session.id)

@@ -44,14 +44,37 @@ export async function POST(req: NextRequest) {
 
           const systemBlocks: string[] = [];
 
+          // Anchor to today's date and forbid fabricating future/undated events
+          const today = new Date().toISOString().split("T")[0];
+          systemBlocks.push(
+            [
+              `Current date: ${today}.`,
+              "When mentioning dates, prefer dates from provided evidence or well-established historical facts.",
+              "Do NOT invent future or undated events. If no recent evidence is available, say so explicitly.",
+            ].join(" ")
+          );
+
+          // Provide current date to anchor recency and prevent outdated/future hallucinations
+          const today = new Date().toISOString().split("T")[0];
+          systemBlocks.push(
+            [
+              `Current date: ${today}.`,
+              "When mentioning dates, prefer evidence dates. Do NOT invent future events.",
+              "If no recent evidence is found, state that clearly instead of guessing.",
+            ].join(" ")
+          );
+
+          // Provide current date to help the model reason about recency
+          systemBlocks.push(`Current date: ${new Date().toISOString().split("T")[0]}.`);
+
           // Qwen: keep your original <think> behavior, but ensure citations appear in the final answer.
           if (selectedModel.toLowerCase().includes("qwen")) {
             systemBlocks.push(
               [
                 "You are a helpful AI assistant.",
-                "Please think step-by-step before answering the user's request.",
-                "Enclose your thinking process within <think> and </think> tags, then provide your final answer.",
-                "IMPORTANT: Any citations and the Sources section must appear in the final answer (outside <think>).",
+                "Think step-by-step, but DO NOT expose your <think> content to the user.",
+                "Keep all reasoning hidden. Respond only with the final answer and Sources.",
+                "If <think> appears in your draft, strip it before replying.",
               ].join(" ")
             );
           }
@@ -75,9 +98,22 @@ export async function POST(req: NextRequest) {
                     rag.context,
                   ].join("\n")
                 );
+              } else {
+                systemBlocks.push(
+                  [
+                    "Web search returned no usable evidence.",
+                    "Do NOT speculate or invent recent events; explicitly state that no recent evidence was found.",
+                  ].join(" ")
+                );
               }
             } catch (err) {
               console.warn("[web-rag] failed, fallback to normal chat:", err);
+              systemBlocks.push(
+                [
+                  "Web search failed or returned no usable evidence.",
+                  "Do NOT speculate or invent recent events; say that no recent evidence is available.",
+                ].join(" ")
+              );
             }
           }
 
@@ -99,10 +135,36 @@ export async function POST(req: NextRequest) {
             throw new Error(`Ollama Error: ${err.message || 'Failed to connect to Ollama'}`);
           });
 
+          let hideThink = selectedModel.toLowerCase().includes("qwen");
+          let thinkOpen = false;
+
+          const encoder = new TextEncoder();
           for await (const part of response) {
-            const content = part.message.content;
+            let content = part.message.content || "";
+
+            if (hideThink && content) {
+              // Simple stream-safe stripping of <think>...</think>
+              let output = "";
+              let i = 0;
+              while (i < content.length) {
+                if (!thinkOpen && content.slice(i).startsWith("<think>")) {
+                  thinkOpen = true;
+                  i += "<think>".length;
+                  continue;
+                }
+                if (thinkOpen && content.slice(i).startsWith("</think>")) {
+                  thinkOpen = false;
+                  i += "</think>".length;
+                  continue;
+                }
+                if (!thinkOpen) output += content[i];
+                i++;
+              }
+              content = output;
+            }
+
             if (content) {
-              controller.enqueue(new TextEncoder().encode(content));
+              controller.enqueue(encoder.encode(content));
             }
           }
           controller.close();
